@@ -1,3 +1,5 @@
+Personal branch! Use at your own risk!
+
 # hyperliquid-rust-sdk
 
 SDK for Hyperliquid API trading with Rust.
