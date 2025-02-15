@@ -1,15 +1,18 @@
+
 use std::collections::HashMap;
 
 use ethers::abi::AbiEncode;
 use ethers::signers::{LocalWallet, Signer};
 use ethers::types::{H160, H256, Signature};
 use log::{debug, info};
+
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
 use super::cancel::ClientCancelRequestCloid;
 use super::order::{MarketCloseParams, MarketOrderParams};
 use super::{BuilderInfo, ClientLimit, ClientOrder, UsdClassTransfer};
+
 use crate::exchange::actions::{
     ApproveAgent, ApproveBuilderFee, BulkCancel, BulkModify, BulkOrder, SetReferrer,
     UpdateIsolatedMargin, UpdateLeverage, UsdSend,
@@ -27,6 +30,7 @@ use crate::{
     BaseUrl, BulkCancelCloid, Error, ExchangeResponseStatus, SpotSend, SpotUser, VaultTransfer,
     Withdraw3, info,
 };
+
 
 #[derive(Debug)]
 pub struct ExchangeClient {
@@ -174,7 +178,7 @@ impl ExchangeClient {
         self.post(action, signature, timestamp).await
     }
 
-    pub async fn class_transfer(
+    pub async fn usd_class_transfer(
         &self,
         usdc: f64,
         to_perp: bool,
@@ -922,6 +926,23 @@ mod tests {
     }
 
     #[test]
+
+    fn test_usd_class_transfer_action_hashing() -> Result<()> {
+        let wallet = get_wallet()?;
+        let usd_class_transfer = UsdClassTransfer {
+            signature_chain_id: 421614.into(),
+            hyperliquid_chain: "Testnet".to_string(),
+            amount: "1.0".to_string(),
+            to_perp: true,
+            nonce: 1690393044548,
+        };
+
+        let expected_sig = "4cf906797ae924a7b448890c2bd57dfcd3414901fff7be831aac0264503cad304c4a767b1854ceb886ccdaf7bfcf35f9e4e58cc297ca540c8b0f1560ba7cccfa1b";
+        assert_eq!(
+            sign_typed_data(&usd_class_transfer, &wallet)?.to_string(),
+            expected_sig
+        );
+
     fn test_approve_builder_fee_signing() -> Result<()> {
         let wallet = get_wallet()?;
 
