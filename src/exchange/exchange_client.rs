@@ -942,6 +942,7 @@ mod tests {
             sign_typed_data(&usd_class_transfer, &wallet)?.to_string(),
             expected_sig
         );
+    }
 
     fn test_approve_builder_fee_signing() -> Result<()> {
         let wallet = get_wallet()?;
