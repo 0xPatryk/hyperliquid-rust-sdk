@@ -1,18 +1,14 @@
 // For synchronous signing.
-// Needed to duplicate our own copy because it wasn't possible to import from ethers-signers.
-use ethers::prelude::k256::{
-    elliptic_curve::generic_array::GenericArray,
-    sha2::{
-        self,
-        digest::{Output, OutputSizeUser},
-        Digest,
+use alloy::{
+    k256::{
+        ecdsa::signature::digest::{FixedOutput, FixedOutputReset, HashMarker, Reset, Update},
+        sha2::{
+            self,
+            digest::{Output, OutputSizeUser},
+            Digest,
+        },
     },
-};
-use ethers::{
-    core::k256::ecdsa::signature::digest::{
-        FixedOutput, FixedOutputReset, HashMarker, Reset, Update,
-    },
-    types::H256,
+    primitives::FixedBytes,
 };
 
 pub(crate) type Sha256Proxy = ProxyDigest<sha2::Sha256>;
@@ -23,12 +19,12 @@ pub(crate) enum ProxyDigest<D: Digest> {
     Digest(D),
 }
 
-impl<D: Digest + Clone> From<H256> for ProxyDigest<D>
+impl<D: Digest + Clone> From<FixedBytes<32>> for ProxyDigest<D>
 where
-    GenericArray<u8, <D as OutputSizeUser>::OutputSize>: Copy,
+    Output<D>: Copy,
 {
-    fn from(src: H256) -> Self {
-        ProxyDigest::Proxy(*GenericArray::from_slice(src.as_bytes()))
+    fn from(src: FixedBytes<32>) -> Self {
+        ProxyDigest::Proxy(*Output::<D>::from_slice(src.as_slice()))
     }
 }
 
@@ -67,7 +63,7 @@ impl<D: Digest> OutputSizeUser for ProxyDigest<D> {
 }
 
 impl<D: Digest> FixedOutput for ProxyDigest<D> {
-    fn finalize_into(self, out: &mut GenericArray<u8, Self::OutputSize>) {
+    fn finalize_into(self, out: &mut Output<Self>) {
         match self {
             ProxyDigest::Digest(d) => {
                 *out = d.finalize();

@@ -18,10 +18,9 @@ use crate::{
     BaseUrl, BulkCancelCloid, Error, ExchangeResponseStatus,
 };
 use crate::{ClassTransfer, SpotSend, SpotUser, VaultTransfer, Withdraw3};
-use ethers::{
-    abi::AbiEncode,
-    signers::{LocalWallet, Signer},
-    types::{Signature, H160, H256},
+use alloy::{
+    primitives::{Address, FixedBytes, U256},
+    signer::{wallet::LocalWallet, Signer},
 };
 use log::debug;
 use reqwest::Client;
@@ -37,7 +36,7 @@ pub struct ExchangeClient {
     pub http_client: HttpClient,
     pub wallet: LocalWallet,
     pub meta: Meta,
-    pub vault_address: Option<H160>,
+    pub vault_address: Option<Address>,
     pub coin_to_asset: HashMap<String, u32>,
 }
 
@@ -47,7 +46,7 @@ struct ExchangePayload {
     action: serde_json::Value,
     signature: Signature,
     nonce: u64,
-    vault_address: Option<H160>,
+    vault_address: Option<Address>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -71,7 +70,7 @@ pub enum Actions {
 }
 
 impl Actions {
-    fn hash(&self, timestamp: u64, vault_address: Option<H160>) -> Result<H256> {
+    fn hash(&self, timestamp: u64, vault_address: Option<Address>) -> Result<FixedBytes<32>> {
         let mut bytes =
             rmp_serde::to_vec_named(self).map_err(|e| Error::RmpParse(e.to_string()))?;
         bytes.extend(timestamp.to_be_bytes());
@@ -81,7 +80,53 @@ impl Actions {
         } else {
             bytes.push(0);
         }
-        Ok(H256(ethers::utils::keccak256(bytes)))
+        Ok(FixedBytes::from_slice(&alloy::utils::keccak256(bytes)))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Signature {
+    pub r: U256,
+    pub s: U256,
+    pub v: u64,
+}
+
+impl Serialize for Signature {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("Signature", 3)?;
+        state.serialize_field(
+            "r",
+            &format!("0x{}", hex::encode(self.r.to_be_bytes::<32>())),
+        )?;
+        state.serialize_field(
+            "s",
+            &format!("0x{}", hex::encode(self.s.to_be_bytes::<32>())),
+        )?;
+        state.serialize_field("v", &self.v)?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Signature {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct SignatureHelper {
+            r: String,
+            s: String,
+            v: u64,
+        }
+
+        let helper = SignatureHelper::deserialize(deserializer)?;
+        let r = U256::from_str(&helper.r).map_err(serde::de::Error::custom)?;
+        let s = U256::from_str(&helper.s).map_err(serde::de::Error::custom)?;
+        Ok(Signature { r, s, v: helper.v })
     }
 }
 
@@ -91,7 +136,7 @@ impl ExchangeClient {
         wallet: LocalWallet,
         base_url: Option<BaseUrl>,
         meta: Option<Meta>,
-        vault_address: Option<H160>,
+        vault_address: Option<Address>,
     ) -> Result<ExchangeClient> {
         let client = client.unwrap_or_default();
         let base_url = base_url.unwrap_or(BaseUrl::Mainnet);
@@ -204,7 +249,7 @@ impl ExchangeClient {
         &self,
         is_deposit: bool,
         usd: String,
-        vault_address: Option<H160>,
+        vault_address: Option<Address>,
         wallet: Option<&LocalWallet>,
     ) -> Result<ExchangeResponseStatus> {
         let vault_address = self

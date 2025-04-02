@@ -1,14 +1,17 @@
-use ethers::signers::LocalWallet;
+use alloy_primitives::Address;
+use alloy_signer::{LocalWallet, Signer};
 use hyperliquid_rust_sdk::{BaseUrl, ExchangeClient};
 use log::info;
+use std::str::FromStr;
 
 #[tokio::main]
 async fn main() {
     env_logger::init();
     // Key was randomly generated for testing and shouldn't be used with any real funds
-    let wallet: LocalWallet = "e908f86dbb4d55ac876378565aafeabc187f6690f046459397b17d9b9a19688e"
-        .parse()
-        .unwrap();
+    let wallet = LocalWallet::from_bytes(
+        &hex::decode("e908f86dbb4d55ac876378565aafeabc187f6690f046459397b17d9b9a19688e").unwrap(),
+    )
+    .unwrap();
 
     let exchange_client = ExchangeClient::new(None, wallet, Some(BaseUrl::Testnet), None, None)
         .await
@@ -21,11 +24,7 @@ async fn main() {
         .vault_transfer(
             is_deposit,
             usd.to_string(),
-            Some(
-                "0x1962905b0a2d0ce7907ae1a0d17f3e4a1f63dfb7"
-                    .parse()
-                    .unwrap(),
-            ),
+            Some(Address::from_str("0x1962905b0a2d0ce7907ae1a0d17f3e4a1f63dfb7").unwrap()),
             None,
         )
         .await

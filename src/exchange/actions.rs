@@ -1,14 +1,10 @@
 use crate::exchange::{cancel::CancelRequest, modify::ModifyRequest, order::OrderRequest};
-pub(crate) use ethers::{
-    abi::{encode, ParamType, Tokenizable},
-    types::{
-        transaction::{
-            eip712,
-            eip712::{encode_eip712_type, EIP712Domain, Eip712, Eip712Error},
-        },
-        H160, U256,
+use alloy::{
+    primitives::{Address, FixedBytes, U256},
+    sol_types::{
+        eip712::{self, Eip712, Eip712Domain, Eip712Error, Type},
+        SolType,
     },
-    utils::keccak256,
 };
 use serde::{Deserialize, Serialize};
 
@@ -16,16 +12,13 @@ use super::{cancel::CancelRequestCloid, BuilderInfo};
 
 pub(crate) const HYPERLIQUID_EIP_PREFIX: &str = "HyperliquidTransaction:";
 
-fn eip_712_domain(chain_id: U256) -> EIP712Domain {
-    EIP712Domain {
-        name: Some("HyperliquidSignTransaction".to_string()),
-        version: Some("1".to_string()),
-        chain_id: Some(chain_id),
-        verifying_contract: Some(
-            "0x0000000000000000000000000000000000000000"
-                .parse()
-                .unwrap(),
-        ),
+fn eip_712_domain(chain_id: U256) -> Eip712Domain {
+    Eip712Domain {
+        name: "HyperliquidSignTransaction".to_string(),
+        version: "1".to_string(),
+        chain_id,
+        verifying_contract: Address::from_str("0x0000000000000000000000000000000000000000")
+            .unwrap(),
         salt: None,
     }
 }
@@ -41,40 +34,42 @@ pub struct UsdSend {
 }
 
 impl Eip712 for UsdSend {
-    type Error = Eip712Error;
+    const NAME: &'static str = "HyperliquidSignTransaction";
+    const VERSION: &'static str = "1";
 
-    fn domain(&self) -> Result<EIP712Domain, Self::Error> {
-        Ok(eip_712_domain(self.signature_chain_id))
+    fn eip712_domain(&self) -> Eip712Domain {
+        eip_712_domain(self.signature_chain_id)
     }
 
-    fn type_hash() -> Result<[u8; 32], Self::Error> {
-        Ok(eip712::make_type_hash(
+    fn eip712_type() -> Type {
+        Type::struct_type(
             format!("{HYPERLIQUID_EIP_PREFIX}UsdSend"),
             &[
-                ("hyperliquidChain".to_string(), ParamType::String),
-                ("destination".to_string(), ParamType::String),
-                ("amount".to_string(), ParamType::String),
-                ("time".to_string(), ParamType::Uint(64)),
+                ("hyperliquidChain", Type::String),
+                ("destination", Type::String),
+                ("amount", Type::String),
+                ("time", Type::Uint(64)),
             ],
-        ))
+        )
     }
 
-    fn struct_hash(&self) -> Result<[u8; 32], Self::Error> {
-        let Self {
-            signature_chain_id: _,
-            hyperliquid_chain,
-            destination,
-            amount,
-            time,
-        } = self;
-        let items = vec![
-            ethers::abi::Token::Uint(Self::type_hash()?.into()),
-            encode_eip712_type(hyperliquid_chain.clone().into_token()),
-            encode_eip712_type(destination.clone().into_token()),
-            encode_eip712_type(amount.clone().into_token()),
-            encode_eip712_type(time.into_token()),
-        ];
-        Ok(keccak256(encode(&items)))
+    fn eip712_hash(&self) -> FixedBytes<32> {
+        let mut hasher = eip712::Eip712Hasher::new(
+            Self::NAME,
+            Self::VERSION,
+            self.signature_chain_id.as_u64(),
+            &self.eip712_domain().verifying_contract,
+        );
+        hasher.add_type("UsdSend", Self::eip712_type());
+        hasher.hash_struct(
+            "UsdSend",
+            &[
+                ("hyperliquidChain", self.hyperliquid_chain.as_str().into()),
+                ("destination", self.destination.as_str().into()),
+                ("amount", self.amount.as_str().into()),
+                ("time", self.time.into()),
+            ],
+        )
     }
 }
 
@@ -126,46 +121,51 @@ pub struct BulkCancelCloid {
 pub struct ApproveAgent {
     pub signature_chain_id: U256,
     pub hyperliquid_chain: String,
-    pub agent_address: H160,
+    pub agent_address: Address,
     pub agent_name: Option<String>,
     pub nonce: u64,
 }
 
 impl Eip712 for ApproveAgent {
-    type Error = Eip712Error;
+    const NAME: &'static str = "HyperliquidSignTransaction";
+    const VERSION: &'static str = "1";
 
-    fn domain(&self) -> Result<EIP712Domain, Self::Error> {
-        Ok(eip_712_domain(self.signature_chain_id))
+    fn eip712_domain(&self) -> Eip712Domain {
+        eip_712_domain(self.signature_chain_id)
     }
 
-    fn type_hash() -> Result<[u8; 32], Self::Error> {
-        Ok(eip712::make_type_hash(
+    fn eip712_type() -> Type {
+        Type::struct_type(
             format!("{HYPERLIQUID_EIP_PREFIX}ApproveAgent"),
             &[
-                ("hyperliquidChain".to_string(), ParamType::String),
-                ("agentAddress".to_string(), ParamType::Address),
-                ("agentName".to_string(), ParamType::String),
-                ("nonce".to_string(), ParamType::Uint(64)),
+                ("hyperliquidChain", Type::String),
+                ("agentAddress", Type::Address),
+                ("agentName", Type::String),
+                ("nonce", Type::Uint(64)),
             ],
-        ))
+        )
     }
 
-    fn struct_hash(&self) -> Result<[u8; 32], Self::Error> {
-        let Self {
-            signature_chain_id: _,
-            hyperliquid_chain,
-            agent_address,
-            agent_name,
-            nonce,
-        } = self;
-        let items = vec![
-            ethers::abi::Token::Uint(Self::type_hash()?.into()),
-            encode_eip712_type(hyperliquid_chain.clone().into_token()),
-            encode_eip712_type(agent_address.into_token()),
-            encode_eip712_type(agent_name.clone().unwrap_or_default().into_token()),
-            encode_eip712_type(nonce.into_token()),
-        ];
-        Ok(keccak256(encode(&items)))
+    fn eip712_hash(&self) -> FixedBytes<32> {
+        let mut hasher = eip712::Eip712Hasher::new(
+            Self::NAME,
+            Self::VERSION,
+            self.signature_chain_id.as_u64(),
+            &self.eip712_domain().verifying_contract,
+        );
+        hasher.add_type("ApproveAgent", Self::eip712_type());
+        hasher.hash_struct(
+            "ApproveAgent",
+            &[
+                ("hyperliquidChain", self.hyperliquid_chain.as_str().into()),
+                ("agentAddress", self.agent_address.into()),
+                (
+                    "agentName",
+                    self.agent_name.as_deref().unwrap_or_default().into(),
+                ),
+                ("nonce", self.nonce.into()),
+            ],
+        )
     }
 }
 
@@ -180,40 +180,42 @@ pub struct Withdraw3 {
 }
 
 impl Eip712 for Withdraw3 {
-    type Error = Eip712Error;
+    const NAME: &'static str = "HyperliquidSignTransaction";
+    const VERSION: &'static str = "1";
 
-    fn domain(&self) -> Result<EIP712Domain, Self::Error> {
-        Ok(eip_712_domain(self.signature_chain_id))
+    fn eip712_domain(&self) -> Eip712Domain {
+        eip_712_domain(self.signature_chain_id)
     }
 
-    fn type_hash() -> Result<[u8; 32], Self::Error> {
-        Ok(eip712::make_type_hash(
+    fn eip712_type() -> Type {
+        Type::struct_type(
             format!("{HYPERLIQUID_EIP_PREFIX}Withdraw"),
             &[
-                ("hyperliquidChain".to_string(), ParamType::String),
-                ("destination".to_string(), ParamType::String),
-                ("amount".to_string(), ParamType::String),
-                ("time".to_string(), ParamType::Uint(64)),
+                ("hyperliquidChain", Type::String),
+                ("destination", Type::String),
+                ("amount", Type::String),
+                ("time", Type::Uint(64)),
             ],
-        ))
+        )
     }
 
-    fn struct_hash(&self) -> Result<[u8; 32], Self::Error> {
-        let Self {
-            signature_chain_id: _,
-            hyperliquid_chain,
-            amount,
-            time,
-            destination,
-        } = self;
-        let items = vec![
-            ethers::abi::Token::Uint(Self::type_hash()?.into()),
-            encode_eip712_type(hyperliquid_chain.clone().into_token()),
-            encode_eip712_type(destination.clone().into_token()),
-            encode_eip712_type(amount.clone().into_token()),
-            encode_eip712_type(time.into_token()),
-        ];
-        Ok(keccak256(encode(&items)))
+    fn eip712_hash(&self) -> FixedBytes<32> {
+        let mut hasher = eip712::Eip712Hasher::new(
+            Self::NAME,
+            Self::VERSION,
+            self.signature_chain_id.as_u64(),
+            &self.eip712_domain().verifying_contract,
+        );
+        hasher.add_type("Withdraw", Self::eip712_type());
+        hasher.hash_struct(
+            "Withdraw",
+            &[
+                ("hyperliquidChain", self.hyperliquid_chain.as_str().into()),
+                ("destination", self.destination.as_str().into()),
+                ("amount", self.amount.as_str().into()),
+                ("time", self.time.into()),
+            ],
+        )
     }
 }
 
@@ -229,43 +231,44 @@ pub struct SpotSend {
 }
 
 impl Eip712 for SpotSend {
-    type Error = Eip712Error;
+    const NAME: &'static str = "HyperliquidSignTransaction";
+    const VERSION: &'static str = "1";
 
-    fn domain(&self) -> Result<EIP712Domain, Self::Error> {
-        Ok(eip_712_domain(self.signature_chain_id))
+    fn eip712_domain(&self) -> Eip712Domain {
+        eip_712_domain(self.signature_chain_id)
     }
 
-    fn type_hash() -> Result<[u8; 32], Self::Error> {
-        Ok(eip712::make_type_hash(
+    fn eip712_type() -> Type {
+        Type::struct_type(
             format!("{HYPERLIQUID_EIP_PREFIX}SpotSend"),
             &[
-                ("hyperliquidChain".to_string(), ParamType::String),
-                ("destination".to_string(), ParamType::String),
-                ("token".to_string(), ParamType::String),
-                ("amount".to_string(), ParamType::String),
-                ("time".to_string(), ParamType::Uint(64)),
+                ("hyperliquidChain", Type::String),
+                ("destination", Type::String),
+                ("token", Type::String),
+                ("amount", Type::String),
+                ("time", Type::Uint(64)),
             ],
-        ))
+        )
     }
 
-    fn struct_hash(&self) -> Result<[u8; 32], Self::Error> {
-        let Self {
-            signature_chain_id: _,
-            hyperliquid_chain,
-            destination,
-            token,
-            amount,
-            time,
-        } = self;
-        let items = vec![
-            ethers::abi::Token::Uint(Self::type_hash()?.into()),
-            encode_eip712_type(hyperliquid_chain.clone().into_token()),
-            encode_eip712_type(destination.clone().into_token()),
-            encode_eip712_type(token.clone().into_token()),
-            encode_eip712_type(amount.clone().into_token()),
-            encode_eip712_type(time.into_token()),
-        ];
-        Ok(keccak256(encode(&items)))
+    fn eip712_hash(&self) -> FixedBytes<32> {
+        let mut hasher = eip712::Eip712Hasher::new(
+            Self::NAME,
+            Self::VERSION,
+            self.signature_chain_id.as_u64(),
+            &self.eip712_domain().verifying_contract,
+        );
+        hasher.add_type("SpotSend", Self::eip712_type());
+        hasher.hash_struct(
+            "SpotSend",
+            &[
+                ("hyperliquidChain", self.hyperliquid_chain.as_str().into()),
+                ("destination", self.destination.as_str().into()),
+                ("token", self.token.as_str().into()),
+                ("amount", self.amount.as_str().into()),
+                ("time", self.time.into()),
+            ],
+        )
     }
 }
 
@@ -285,7 +288,7 @@ pub struct ClassTransfer {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct VaultTransfer {
-    pub vault_address: H160,
+    pub vault_address: Address,
     pub is_deposit: bool,
     pub usd: String,
 }
@@ -304,4 +307,44 @@ pub struct ApproveBuilderFee {
     pub nonce: u64,
     pub signature_chain_id: U256,
     pub hyperliquid_chain: String,
+}
+
+impl Eip712 for ApproveBuilderFee {
+    const NAME: &'static str = "HyperliquidSignTransaction";
+    const VERSION: &'static str = "1";
+
+    fn eip712_domain(&self) -> Eip712Domain {
+        eip_712_domain(self.signature_chain_id)
+    }
+
+    fn eip712_type() -> Type {
+        Type::struct_type(
+            format!("{HYPERLIQUID_EIP_PREFIX}ApproveBuilderFee"),
+            &[
+                ("hyperliquidChain", Type::String),
+                ("builder", Type::String),
+                ("maxFeeRate", Type::String),
+                ("nonce", Type::Uint(64)),
+            ],
+        )
+    }
+
+    fn eip712_hash(&self) -> FixedBytes<32> {
+        let mut hasher = eip712::Eip712Hasher::new(
+            Self::NAME,
+            Self::VERSION,
+            self.signature_chain_id.as_u64(),
+            &self.eip712_domain().verifying_contract,
+        );
+        hasher.add_type("ApproveBuilderFee", Self::eip712_type());
+        hasher.hash_struct(
+            "ApproveBuilderFee",
+            &[
+                ("hyperliquidChain", self.hyperliquid_chain.as_str().into()),
+                ("builder", self.builder.as_str().into()),
+                ("maxFeeRate", self.max_fee_rate.as_str().into()),
+                ("nonce", self.nonce.into()),
+            ],
+        )
+    }
 }
