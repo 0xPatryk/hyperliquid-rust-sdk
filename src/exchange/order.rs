@@ -1,12 +1,11 @@
 use crate::{
     errors::Error,
-    helpers::{float_to_string_for_hashing, uuid_to_hex_string},
+    helpers::{float_to_string_for_hashing, string_to_hex_string},
     prelude::*,
 };
 use ethers::signers::LocalWallet;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use uuid::Uuid;
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Limit {
@@ -66,7 +65,7 @@ pub struct MarketOrderParams<'a> {
     pub sz: f64,
     pub px: Option<f64>,
     pub slippage: Option<f64>,
-    pub cloid: Option<Uuid>,
+    pub cloid: Option<String>,
     pub wallet: Option<&'a LocalWallet>,
 }
 
@@ -76,7 +75,7 @@ pub struct MarketCloseParams<'a> {
     pub sz: Option<f64>,
     pub px: Option<f64>,
     pub slippage: Option<f64>,
-    pub cloid: Option<Uuid>,
+    pub cloid: Option<String>,
     pub wallet: Option<&'a LocalWallet>,
 }
 
@@ -93,7 +92,7 @@ pub struct ClientOrderRequest {
     pub reduce_only: bool,
     pub limit_px: f64,
     pub sz: f64,
-    pub cloid: Option<Uuid>,
+    pub cloid: Option<String>,
     pub order_type: ClientOrder,
 }
 
@@ -109,7 +108,7 @@ impl ClientOrderRequest {
         };
         let &asset = coin_to_asset.get(&self.asset).ok_or(Error::AssetNotFound)?;
 
-        let cloid = self.cloid.map(uuid_to_hex_string);
+        let cloid = self.cloid.as_deref().map(string_to_hex_string);
 
         Ok(OrderRequest {
             asset,

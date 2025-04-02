@@ -1,10 +1,9 @@
-
 use std::collections::HashMap;
 
 use ethers::abi::AbiEncode;
 use ethers::signers::{LocalWallet, Signer};
-use ethers::types::{H160, H256, Signature};
-use log::{debug, info};
+use ethers::types::{Signature, H160, H256};
+use log::debug;
 
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -20,7 +19,7 @@ use crate::exchange::actions::{
 use crate::exchange::cancel::{CancelRequest, CancelRequestCloid};
 use crate::exchange::modify::{ClientModifyRequest, ModifyRequest};
 use crate::exchange::{ClientCancelRequest, ClientOrderRequest};
-use crate::helpers::{generate_random_key, next_nonce, uuid_to_hex_string};
+use crate::helpers::{generate_random_key, next_nonce, string_to_hex_string};
 use crate::info::info_client::InfoClient;
 use crate::meta::Meta;
 use crate::prelude::*;
@@ -28,9 +27,8 @@ use crate::req::HttpClient;
 use crate::signature::{sign_l1_action, sign_typed_data};
 use crate::{
     BaseUrl, BulkCancelCloid, Error, ExchangeResponseStatus, SpotSend, SpotUser, VaultTransfer,
-    Withdraw3, info,
+    Withdraw3,
 };
-
 
 #[derive(Debug)]
 pub struct ExchangeClient {
@@ -565,7 +563,7 @@ impl ExchangeClient {
                 .ok_or(Error::AssetNotFound)?;
             transformed_cancels.push(CancelRequestCloid {
                 asset,
-                cloid: uuid_to_hex_string(cancel.cloid),
+                cloid: string_to_hex_string(&cancel.cloid),
             });
         }
 
@@ -787,11 +785,9 @@ fn round_to_significant_and_decimal(value: f64, sig_figs: u32, max_decimals: u32
 
 #[cfg(test)]
 mod tests {
-    use std::str::FromStr;
-
     use super::*;
-    use crate::Order;
     use crate::exchange::order::{Limit, OrderRequest, Trigger};
+    use crate::Order;
 
     fn get_wallet() -> Result<LocalWallet> {
         let priv_key = "e908f86dbb4d55ac876378565aafeabc187f6690f046459397b17d9b9a19688e";
@@ -831,8 +827,7 @@ mod tests {
 
     #[test]
     fn test_limit_order_action_hashing_with_cloid() -> Result<()> {
-        let cloid = uuid::Uuid::from_str("1e60610f-0b3d-4205-97c8-8c1fed2ad5ee")
-            .map_err(|_e| uuid::Uuid::new_v4());
+        let cloid_string = "my_test_cloid_123";
         let wallet = get_wallet()?;
         let action = Actions::Order(BulkOrder {
             orders: vec![OrderRequest {
@@ -844,7 +839,7 @@ mod tests {
                 order_type: Order::Limit(Limit {
                     tif: "Ioc".to_string(),
                 }),
-                cloid: Some(uuid_to_hex_string(cloid.unwrap())),
+                cloid: Some(string_to_hex_string(cloid_string)),
             }],
             grouping: "na".to_string(),
             builder: None,
@@ -852,10 +847,10 @@ mod tests {
         let connection_id = action.hash(1583838, None)?;
 
         let signature = sign_l1_action(&wallet, connection_id, true)?;
-        assert_eq!(signature.to_string(), "d3e894092eb27098077145714630a77bbe3836120ee29df7d935d8510b03a08f456de5ec1be82aa65fc6ecda9ef928b0445e212517a98858cfaa251c4cd7552b1c");
+        assert_eq!(signature.to_string(), "ee14b261b6d266fe1de89a03173941fff7ae72b030d687051a5b54341508a7a97f57569feabada6d3c1fb427d6419a644ef522df54f61b7affde415bc29834531b");
 
         let signature = sign_l1_action(&wallet, connection_id, false)?;
-        assert_eq!(signature.to_string(), "3768349dbb22a7fd770fc9fc50c7b5124a7da342ea579b309f58002ceae49b4357badc7909770919c45d850aabb08474ff2b7b3204ae5b66d9f7375582981f111c");
+        assert_eq!(signature.to_string(), "79982476cf32b5267362db53b74ff4350bcff3e39fa1bf3fe2035a18bc3ea53a6db230b79f6b94e2206b200d04c26f6eada88e6f12e0100cca9645715fc0f5981c");
 
         Ok(())
     }
@@ -926,7 +921,6 @@ mod tests {
     }
 
     #[test]
-
     fn test_usd_class_transfer_action_hashing() -> Result<()> {
         let wallet = get_wallet()?;
         let usd_class_transfer = UsdClassTransfer {
@@ -942,8 +936,10 @@ mod tests {
             sign_typed_data(&usd_class_transfer, &wallet)?.to_string(),
             expected_sig
         );
+        Ok(())
     }
 
+    #[test]
     fn test_approve_builder_fee_signing() -> Result<()> {
         let wallet = get_wallet()?;
 
