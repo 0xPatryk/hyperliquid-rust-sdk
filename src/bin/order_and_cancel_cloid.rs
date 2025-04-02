@@ -5,7 +5,6 @@ use hyperliquid_rust_sdk::{
     BaseUrl, ClientCancelRequestCloid, ClientLimit, ClientOrder, ClientOrderRequest, ExchangeClient,
 };
 use std::{thread::sleep, time::Duration};
-use uuid::Uuid;
 
 #[tokio::main]
 async fn main() {
@@ -20,14 +19,13 @@ async fn main() {
         .unwrap();
 
     // Order and Cancel with cloid
-    let cloid = Uuid::new_v4();
     let order = ClientOrderRequest {
         asset: "ETH".to_string(),
         is_buy: true,
         reduce_only: false,
         limit_px: 1800.0,
         sz: 0.01,
-        cloid: Some(cloid),
+        cloid: Some("my_own_custom_id".to_string()),
         order_type: ClientOrder::Limit(ClientLimit {
             tif: "Gtc".to_string(),
         }),
@@ -41,7 +39,7 @@ async fn main() {
 
     let cancel = ClientCancelRequestCloid {
         asset: "ETH".to_string(),
-        cloid,
+        cloid: "my_own_custom_id".to_string(),
     };
 
     // This response will return an error if order was filled (since you can't cancel a filled order), otherwise it will cancel the order

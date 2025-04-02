@@ -1,10 +1,10 @@
 use crate::{consts::*, prelude::*, Error};
 use chrono::prelude::Utc;
+use ethers::core::utils::keccak256;
 use lazy_static::lazy_static;
 use log::info;
 use rand::{thread_rng, Rng};
 use std::sync::atomic::{AtomicU64, Ordering};
-use uuid::Uuid;
 
 fn now_timestamp_ms() -> u64 {
     let now = Utc::now();
@@ -41,13 +41,16 @@ pub(crate) fn float_to_string_for_hashing(x: f64) -> String {
     }
 }
 
-pub(crate) fn uuid_to_hex_string(uuid: Uuid) -> String {
-    let hex_string = uuid
-        .as_bytes()
+/// Converts a string to a deterministic 128-bit (16 bytes) hex string prefixed with "0x".
+/// Uses Keccak256 hashing.
+pub(crate) fn string_to_hex_string(input: &str) -> String {
+    let hash = keccak256(input.as_bytes());
+    // Take the first 16 bytes (128 bits) of the hash
+    let truncated_hash = &hash[0..16];
+    let hex_string = truncated_hash
         .iter()
         .map(|byte| format!("{:02x}", byte))
-        .collect::<Vec<String>>()
-        .join("");
+        .collect::<String>();
     format!("0x{}", hex_string)
 }
 
@@ -139,6 +142,30 @@ mod tests {
         assert_eq!(
             float_to_string_for_hashing(987654321.),
             "987654321".to_string()
+        );
+    }
+
+    #[test]
+    fn string_to_hex_string_test() {
+        // Basic test case
+        assert_eq!(
+            string_to_hex_string("test"),
+            "0x9c22ff5f21f0b81b113e63f7db6da94fedef11b2119b4088b89664fb9a3cb658"[0..34] // 0x + 16*2 hex chars
+        );
+        // Test with empty string
+        assert_eq!(
+            string_to_hex_string(""),
+            "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"[0..34]
+        );
+        // Test with a longer string
+        assert_eq!(
+            string_to_hex_string("a longer test string for hashing"),
+            "0xb2ae80682ae56e5e8a930a907beeb1460f768176176b60f677105e9e661e3aaa"[0..34]
+        );
+        // Test with unicode
+        assert_eq!(
+            string_to_hex_string("你好世界"), // "Hello World" in Chinese
+            "0xd3f05f6be06f8b0a91c1ab0ea49f4554921f35d01eb600778ca36273f6b6d2a8"[0..34]
         );
     }
 }
