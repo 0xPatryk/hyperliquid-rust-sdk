@@ -334,7 +334,7 @@ impl Eip712 for UsdClassTransfer {
 pub struct VaultTransfer {
     pub vault_address: H160,
     pub is_deposit: bool,
-    pub usd: String,
+    pub usd: u64,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
